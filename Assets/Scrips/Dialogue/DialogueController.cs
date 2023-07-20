@@ -5,12 +5,12 @@ using Ink.Runtime;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine.EventSystems;
-
+using DG.Tweening;
 
 
 public class DialogueController : MonoBehaviour
 {
-    private const string SpeakerSeperator = ":";
+    private const string SpeakerSeparator = ":";
     private const string EscapedColon = "::";
     private const string EscapedColonPlaceholder = "§";
     
@@ -19,15 +19,18 @@ public class DialogueController : MonoBehaviour
 
 
     public static event Action<string> InkEvent;
+    
     #region Inspector
 
     [Header("Ink")]
     [Tooltip("Compiled ink text asset")]
-    [SerializeField] TextAsset inkAsset;
+    [SerializeField] private TextAsset inkAsset;
 
     [Header("Ui")]
     [SerializeField] private DialogueBox dialogueBox;
     #endregion
+
+    private GameState gameState;
     
     #region Privat Variables
 
@@ -39,11 +42,15 @@ public class DialogueController : MonoBehaviour
 
     private void Awake()
     {
+        gameState = FindObjectOfType<GameState>();
+        
         inkStory = new Story(inkAsset.text);
 
         inkStory.onError += OnInkError;
         
         inkStory.BindExternalFunction<string>("Event", Event);
+        inkStory.BindExternalFunction<string>("Get_State", Get_State);
+        inkStory.BindExternalFunction<string, int>("Add_State", Add_State);
     }
 
     private void Start()
@@ -76,7 +83,7 @@ public class DialogueController : MonoBehaviour
     {
         inkLine = inkLine.Replace(EscapedColon, EscapedColonPlaceholder);
         //splits text into parts at :
-        List<string> parts = inkLine.Split(SpeakerSeperator).ToList();
+        List<string> parts = inkLine.Split(SpeakerSeparator).ToList();
         string speaker;
         string text;
 
@@ -93,14 +100,14 @@ public class DialogueController : MonoBehaviour
                 break;
             
                 default:
-                Debug.LogWarning($@"Ink duialogue line was split at more {SpeakerSeperator} than expected. Please make sure to use {EscapedColon} for {SpeakerSeperator} inside next");
+                Debug.LogWarning($@"Ink duialogue line was split at more {SpeakerSeparator} than expected. Please make sure to use {EscapedColon} for {SpeakerSeparator} inside next");
                 goto case 2;
                 
         }
         DialogueLine line = new DialogueLine();
 
         line.speaker = speaker?.Trim();
-        line.text = text.Trim().Replace(EscapedColonPlaceholder, SpeakerSeperator);
+        line.text = text.Trim().Replace(EscapedColonPlaceholder, SpeakerSeparator);
 
 
         for (int i = 0; i < tags.Count; i++)
@@ -112,7 +119,7 @@ public class DialogueController : MonoBehaviour
                     break;
                 
                 case "portrait":
-                    List<string> portraiparts = tags[i].Split(SpeakerSeperator).ToList();
+                    List<string> portraiparts = tags[i].Split(SpeakerSeparator).ToList();
                     if (portraiparts[1] == "player")
                     {
                         
@@ -145,17 +152,30 @@ public class DialogueController : MonoBehaviour
         ContinueDialogue();
     }
 
+    /// <summary>
+    /// Show the dialogue UI.
+    /// </summary>
     private void OpenDialogue()
     {
         dialogueBox.gameObject.SetActive(true);
+        dialogueBox.DOShow();
         DialogueOpened?.Invoke();
-        
     }
 
+    /// <summary>
+    /// Hide the dialogue UI and clean up.
+    /// </summary>
     private void CloseDialogue()
     {
+        // Deselect everything in the UI.
         EventSystem.current.SetSelectedGameObject(null);
-        dialogueBox.gameObject.SetActive(false);
+ 
+        dialogueBox.DOHide()
+                   .OnComplete(() =>
+                   {
+                       dialogueBox.gameObject.SetActive(false);
+                   });
+        
         DialogueClosed?.Invoke();
     }
     private void ContinueDialogue()
@@ -166,7 +186,7 @@ public class DialogueController : MonoBehaviour
             return;
         }
 
-        DialogueLine line = new DialogueLine();
+        DialogueLine line;
         
         if (CanContinue())
         {
@@ -241,6 +261,17 @@ public class DialogueController : MonoBehaviour
     }
     
     #endregion
+
+    private object Get_State(string id)
+    {
+        State state = gameState.Get(id);
+        return state != null ? state.amount : 0;
+    }
+
+    private void Add_State(string id, int amount)
+    {
+        gameState.Add(id, amount);
+    }
 }
 public struct DialogueLine
 {

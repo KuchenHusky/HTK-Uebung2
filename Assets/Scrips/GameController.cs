@@ -1,4 +1,4 @@
-using System;
+
 
 using UnityEngine;
 
@@ -45,7 +45,7 @@ public class GameController : MonoBehaviour
     #endregion
     #region modes
 
-    void EnterPlayMode()
+    private void EnterPlayMode()
     {
         Cursor.lockState = CursorLockMode.Locked;
         player.EnableInput();
